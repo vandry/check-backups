@@ -501,7 +501,7 @@ impl Resource for Prober {
             if tokio::time::timeout_at(next_run, async {
                 // Mark everything unseen
                 for (_, v) in good_backups.iter_mut() {
-                    *v = false;
+                    *v = None;
                 }
                 for (_, v) in counts.iter_mut() {
                     *v = 0;
@@ -513,15 +513,17 @@ impl Resource for Prober {
                 {
                     let tag = match details.result {
                         Ok(ref ts) => {
-                            LATEST_SUCCESSFUL_BACKUP
-                                .with_label_values(&[
-                                    &details.ident.vol.namespace,
-                                    &details.ident.vol.pvc_name,
-                                ])
-                                .set(ts.timestamp() as f64);
-                            good_backups
+                            let this_ts = ts.timestamp();
+                            let entry = good_backups
                                 .entry(Arc::clone(&details.ident.vol))
-                                .insert_entry(true);
+                                .or_insert(Some(this_ts));
+                            let replace = match *entry {
+                                None => true,
+                                Some(prev) => prev < this_ts,
+                            };
+                            if replace {
+                                *entry = Some(this_ts);
+                            }
                             "successful"
                         }
                         Err(ref e) => {
@@ -532,11 +534,21 @@ impl Resource for Prober {
                     *counts.entry((details.ident.vol, tag)).or_insert(0) += 1;
                 }
                 good_backups.retain(|vol, v| {
-                    if !*v {
-                        let _ = LATEST_SUCCESSFUL_BACKUP
-                            .remove_label_values(&[&vol.namespace, &vol.pvc_name]);
+                    match v {
+                        None => {
+                            let _ = LATEST_SUCCESSFUL_BACKUP
+                                .remove_label_values(&[&vol.namespace, &vol.pvc_name]);
+                        }
+                        Some(ts) => {
+                            LATEST_SUCCESSFUL_BACKUP
+                                .with_label_values(&[
+                                    &vol.namespace,
+                                    &vol.pvc_name,
+                                ])
+                                .set(*ts as f64);
+                        }
                     }
-                    *v
+                    v.is_some()
                 });
                 for ((vol, tag), v) in counts.iter() {
                     BACKUP_COUNTS
