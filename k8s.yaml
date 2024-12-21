@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: check-backups
+  name: check-backups
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: check-backups
+  template:
+    metadata:
+      labels:
+        app: check-backups
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9090"
+        prometheus.io/scrape: "true"
+    spec:
+      containers:
+      - name: check-backups
+        image: vandry/check_backups
+        command:
+        - "/check-backups"
+        - "--s3-endpoint=https://sos-ch-gva-2.exo.io"
+        - "--s3-region-name=ch-gva-2"
+        - "--bucket-name=longhorn-backup"
+        - "--diag-http-port=9090"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 9090
+            scheme: HTTP
+        volumeMounts:
+          - name: s3-credentials
+            readOnly: true
+            mountPath: "/root/.aws"
+        ports:
+        - containerPort: 9090
+        env:
+        - name: RUST_LOG
+          value: info
+      volumes:
+        - name: s3-credentials
+          secret:
+            secretName: check-backups.s3.credentials
+      restartPolicy: Always

@@ -1,0 +1,27 @@
+[package]
+name = "check-backups"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chrono = "0.4"
+clap = { version = "4.5", features = ["derive"] }
+comprehensive = { version = "0.5" }
+comprehensive_s3 = { version = "0.1" }
+env_logger = "0.11"
+futures = "0.3"
+hex = "0.4"
+humantime = "2.1"
+lazy_static = "1.5"
+log = "0.4"
+lz4 = "1.28"
+openssl = { version = "0.10", features = ["vendored"] }  # for musl build
+prometheus = "0.13"
+rust-s3 = "0.35"
+serde = "1.0"
+serde_json = "1.0"
+sha2 = "0.10"
+tokio = { version = "1.42", features = ["macros", "rt-multi-thread"] }
+tokio-task-pool = "0.1"
+tokio-util = "0.7"
+ttl_cache = "0.5"
