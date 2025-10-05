@@ -570,7 +570,7 @@ impl Resource for Prober {
 #[derive(ResourceDependencies)]
 struct TopDependencies {
     _prober: Arc<Prober>,
-    _diag: Arc<comprehensive::diag::HttpServer>,
+    _diag: Arc<comprehensive_http::diag::HttpServer>,
 }
 
 #[tokio::main]
