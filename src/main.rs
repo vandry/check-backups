@@ -571,6 +571,7 @@ impl Resource for Prober {
 struct TopDependencies {
     _prober: Arc<Prober>,
     _diag: Arc<comprehensive_http::diag::HttpServer>,
+    _spiffe: std::marker::PhantomData<comprehensive_spiffe::SpiffeTlsProvider>,
 }
 
 #[tokio::main]

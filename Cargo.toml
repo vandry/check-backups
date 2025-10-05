@@ -9,6 +9,7 @@ clap = { version = "4.5", features = ["derive"] }
 comprehensive = { version = "0.7.4" }
 comprehensive_http = { version = "0.2.0", features = ["tls"] }
 comprehensive_s3 = { version = "0.1.2" }
+comprehensive_spiffe = { version = "0.2.1" }
 env_logger = "0.11"
 futures = "0.3"
 hex = "0.4"
