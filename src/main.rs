@@ -1,5 +1,5 @@
 use chrono::{offset::FixedOffset, DateTime};
-use comprehensive::{Resource, ResourceDependencies};
+use comprehensive::v1::{AssemblyRuntime, Resource, resource};
 use futures::future::Either;
 use futures::stream::FuturesUnordered;
 use futures::{FutureExt, StreamExt};
@@ -469,34 +469,32 @@ where
     }
 }
 
-struct Prober {
-    bucket: Arc<BackupsBucket>,
-    config: ProberArgs,
-}
+struct Prober;
 
-#[derive(ResourceDependencies)]
-struct ProberDependencies {
-    bucket: Arc<BackupsBucket>,
-}
-
+#[resource]
 impl Resource for Prober {
-    type Args = ProberArgs;
-    type Dependencies = ProberDependencies;
     const NAME: &str = "Backup prober";
 
-    fn new(d: ProberDependencies, a: ProberArgs) -> Result<Self, Box<dyn std::error::Error>> {
-        Ok(Self {
-            bucket: d.bucket,
-            config: a,
-        })
+    fn new(
+        (bucket,): (Arc<BackupsBucket>,),
+        a: ProberArgs,
+        api: &mut AssemblyRuntime<'_>,
+    ) -> Result<Arc<Self>, std::convert::Infallible> {
+        api.set_task(async move { Self::run(bucket, a).await });
+        Ok(Arc::new(Self))
     }
+}
 
-    async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut cache = TtlCache::new(self.config.check_cache_capacity);
+impl Prober {
+    async fn run(
+        bucket: Arc<BackupsBucket>,
+        config: ProberArgs,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut cache = TtlCache::new(config.check_cache_capacity);
         let mut good_backups = HashMap::new();
         let mut counts = HashMap::new();
         loop {
-            let next_run = tokio::time::Instant::now() + self.config.probe_interval;
+            let next_run = tokio::time::Instant::now() + config.probe_interval;
             PROBES_STARTED.inc();
             if tokio::time::timeout_at(next_run, async {
                 // Mark everything unseen
@@ -507,7 +505,7 @@ impl Resource for Prober {
                     *v = 0;
                 }
 
-                for details in SingleProbe::probe(&self.bucket, &mut cache, &self.config)
+                for details in SingleProbe::probe(&bucket, &mut cache, &config)
                     .await
                     .into_iter()
                 {
@@ -552,7 +550,7 @@ impl Resource for Prober {
                 });
                 for ((vol, tag), v) in counts.iter() {
                     BACKUP_COUNTS
-                        .with_label_values(&[&vol.namespace, &vol.pvc_name, tag])
+                        .with_label_values(&[&vol.namespace, &vol.pvc_name, *tag])
                         .set(*v as f64);
                 }
             })
@@ -567,18 +565,18 @@ impl Resource for Prober {
     }
 }
 
-#[derive(ResourceDependencies)]
-struct TopDependencies {
-    _prober: Arc<Prober>,
-    _diag: Arc<comprehensive_http::diag::HttpServer>,
-    _spiffe: std::marker::PhantomData<comprehensive_spiffe::SpiffeTlsProvider>,
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
-    comprehensive::Assembly::<TopDependencies>::new()?
-        .run()
-        .await?;
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
+    comprehensive::Assembly::<(
+        Arc<Prober>,
+        Arc<comprehensive_http::diag::HttpServer>,
+        std::marker::PhantomData<comprehensive_spiffe::SpiffeTlsProvider>,
+    )>::new()?
+    .run()
+    .await?;
     Ok(())
 }
